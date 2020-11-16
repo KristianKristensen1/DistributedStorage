@@ -138,16 +138,16 @@ def add_files():
     print("Storage mode: %s" % storage_mode)
 
     if storage_mode == 'raid1':
-        log("Raid1")
+        print("Raid1")
 
     elif storage_mode == 'erasure_coding_rs':
-        log("Erasure_Coding_rs")
+        print("Erasure_Coding_rs")
 
     elif storage_mode == 'erasure_coding_rlnc':
-        log("Erasure_coding_rlnc")
+        print("Erasure_coding_rlnc")
 
     elif storage_mode == 's3' :
-        log("s3")
+        print("s3")
 
     else:
         logging.error("Unexpected storage mode: %s" % storage_mode)
