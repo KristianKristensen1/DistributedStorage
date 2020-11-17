@@ -112,7 +112,7 @@ def download_file(file_id):
     storage_details = json.loads(f['storage_details'])
     print(f['storage_mode'])
 
-    if f['storage_mode'] == 'replication':
+    if f['storage_mode'] == 'replication1':
         filename = storage_details['replication_filename']
 
         file_data = replication.get_file(
@@ -120,6 +120,7 @@ def download_file(file_id):
             data_req_socket, 
             response_socket
         )
+        
 
     return send_file(io.BytesIO(file_data), mimetype=f['content_type'])
 #
