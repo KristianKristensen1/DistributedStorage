@@ -59,10 +59,10 @@ print ( "Data folder: %s " % data_folder)
 context = zmq.Context()
 
 # Ask the user to input the last segment of the server IP address
-server_address = input ( "Server address: 192.168.0.___ " )
+# server_address = input ( "Server address: 192.168.0.___ " )
 
 # Socket to receive Store Chunk messages from the controller
-pull_address = "tcp://192.168.0." +server_address+ ":5557"
+pull_address = "tcp://localhost:5557"
 #pull_address = "tcp://localhost:5557"
 receiver = context.socket(zmq.PULL)
 receiver.connect(pull_address)
@@ -70,12 +70,12 @@ print ( "Listening on %s " % pull_address)
 
 # Socket to send results to the controller
 sender = context.socket(zmq.PUSH)
-sender.connect( "tcp://192.168.0." +server_address+ ":5558" )
+sender.connect( "tcp://localhost:5558" )
 #sender.connect("tcp://localhost:5558")
 
 # Socket to receive Get Chunk messages from the controller
 subscriber = context.socket(zmq.SUB)
-subscriber.connect( "tcp://192.168.0." +server_address+ ":5559" )
+subscriber.connect( "tcp://localhost:5559" )
 #subscriber.connect("tcp://localhost:5559")
 
 # Receive every message (empty subscription)
@@ -91,7 +91,7 @@ while True :
         # Poll all sockets
         socks = dict (poller.poll())
     except KeyboardInterrupt :
-        break
+        pass
 
     # At this point one or multiple sockets have received a message
 
