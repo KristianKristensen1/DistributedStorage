@@ -91,7 +91,7 @@ while True :
         # Poll all sockets
         socks = dict (poller.poll())
     except KeyboardInterrupt :
-        pass
+        break
 
     # At this point one or multiple sockets have received a message
 

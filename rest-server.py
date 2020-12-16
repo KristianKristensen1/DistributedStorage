@@ -17,43 +17,11 @@ import messages_pb2 # Generated Protobuf messages
 import io # For sending binary data in a HTTP response
 import utils
 import replication
+import json
+import urllib.request
+import threading
+import time
 
-def random_string(length=8):
-    """
-    Returns a random alphanumeric string of the given length. 
-    Only lowercase ascii letters and numbers are used.
-
-    :param length: Length of the requested random string 
-    :return: The random generated string
-    """
-    return ''.join([random.SystemRandom().choice(string.ascii_letters + string.digits) for n in range(length)])
-
-def write_file(data, filename=None):
-    """
-    Write the given data to a local file with the given filename
-
-    :param data: A bytes object that stores the file contents
-    :param filename: The file name. If not given, a random string is generated
-    :return: The file name of the newly written file, or None if there was an error
-    """
-    if not filename:
-        # Generate random filename
-        filename = random_string(length=8)
-        # Add '.bin' extension
-        filename += ".bin"
-    
-    try:
-        # Open filename for writing binary content ('wb')
-        # note: when a file is opened using the 'with' statment, 
-        # it is closed automatically when the scope ends
-        with open('./'+filename, 'wb') as f:
-            f.write(data)
-    except EnvironmentError as e:
-        print("Error writing file: {}".format(e))
-        return None
-    
-    return filename
-#
 
 # Initiate ZMQ sockets
 context = zmq.Context()
@@ -81,15 +49,53 @@ app = Flask(__name__)
 # Close the DB connection after serving the request
 app.teardown_appcontext(utils.close_db)
 
-@app.route('/')
-def hello():
-    return make_response({'message': 'Hello World!'})
+# Load the datanode IP addresses from datanodes.txt 
+DATANODE_ADDRESSES = utils.read_file_by_line('datanodes.txt')
+print("Using %d Datanodes:\n%s\n" % (len(DATANODE_ADDRESSES), '\n'.join(DATANODE_ADDRESSES)))
+
+@app.after_request
+def add_cors_headers(response):
+    """
+    Add Cross-Origin Resource Sharing headers to every response.
+    Without these the browser does not allow the HDFS webapp to process the response.
+    """
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type'
+    response.headers['access-control-allow-methods'] = 'DELETE, GET, OPTIONS, POST, PUT'
+    return response
+#
 
 @app.route('/files',  methods=['GET'])
 def list_files():
+    db = utils.get_db()
+    cursor = db.execute( "SELECT * FROM `file`" )
+    if not cursor:
+        return make_response({ "message" : "Error connecting to the database" }, 500 )
+    files = cursor.fetchall()
 
-    return 0
- #Functionality to get files
+    # Convert files from sqlite3.Row object (which is not JSON-encodable) to
+    # a standard Python dictionary simply by casting
+    files = [ dict ( file ) for file in files]
+    return make_response({ "files" : files})
+#
+
+@app.route('/done',  methods=['POST'])
+def done():
+    print("Done is called!")
+    rep2End = time.time()
+    file_id = request.get_json()
+    db = utils.get_db()
+    cursor = db.execute("SELECT `recieved_time` FROM `file` WHERE `id`=?", [file_id])
+    f = cursor.fetchone()
+    f = dict(f)
+    print(f)
+    rep2Start = f['recieved_time']
+    Timediff = rep2End - rep2Start
+    f = open("replication2_redundancy_done.txt", "a")
+    f.write(str(round(Timediff, 4)) + ', ')
+    f.close()
+    return make_response("Shit went well! ")
+
 #
 
 @app.route('/files/<int:file_id>',  methods=['GET'])
@@ -105,82 +111,71 @@ def download_file(file_id):
 
     # Convert to a Python dictionary
     f = dict(f)
+
     print("File requested: {}".format(f['filename']))
-    
-    # Parse the storage details JSON string
-    import json
-    storage_details = json.loads(f['storage_details'])
-    print(f['storage_mode'])
+ 
+    if f['storage_mode'] == 'replication1' or 'replication2':
+        file_locations = f['replica_locations']
+        locations = file_locations.split()
+        for i in range(len(locations)):
+            try:
+                file_data = replication.get_file(file_id, locations[i])
+                break
+            except:
+                continue
 
-    if f['storage_mode'] == 'replication1':
-        filename = storage_details['replication_filename']
-
-        file_data = replication.get_file(
-            filename, 
-            data_req_socket, 
-            response_socket
-        )
-        
-
-    return send_file(io.BytesIO(file_data), mimetype=f['content_type'])
+    return send_file(file_data, mimetype=f['content_type'])
 #
 
 @app.route('/files', methods=['POST'])
-def add_files():
-    # Flask separates files from the other form fields
-    payload = request.form
-    files = request.files
-    
-    # Make sure there is a file in the request
-    if not files or not files.get('file'):
-        logging.error("No file was uploaded in the request!")
-        return make_response("File missing!", 400)
-    
-    # Reference to the file under 'file' key
-    file = files.get('file')
-    # The sender encodes a the file name and type together with the file contents
-    filename = file.filename
-    content_type = file.mimetype
-    # Load the file contents into a bytearray and measure its size
-    data = bytearray(file.read())
-    size = len(data)
-    print("File received: %s, size: %d bytes, type: %s" % (filename, size, content_type))
-    
-    # Read the requested storage mode from the form (default value: 'replication1')
-    storage_mode = payload.get('storage', 'replication1')
-    print("Storage mode: %s" % storage_mode)
+def add_files():    
+    postStart = time.time()
+    payload = request.get_json()
+    file_data = base64.b64decode(payload.get( 'file_data' ))
+    filename = payload.get( 'filename' )
+    filetype = payload.get( 'type' )
+    storage_mode = payload.get('storage')
+    size = len(file_data)
 
     if storage_mode == 'replication1':
         # Set number of replicas to be saved (default value: 1)
         replication_number = payload.get('replicas', 1)
-        replication_name = replication.store_file(data, replication_number, send_task_socket, response_socket)
-        storage_details = {
-            "replication_filename": replication_name
-        }
 
-    elif storage_mode == 'erasure_coding_rs':
-        print("Erasure_Coding_rs")
+        # Sample k random storage location adresses 
+        replica_locations = random.sample(DATANODE_ADDRESSES, k = int(replication_number))
 
-    elif storage_mode == 'erasure_coding_rlnc':
-        print("Erasure_coding_rlnc")
+        file_id = replication.store_db(filename, size, filetype, storage_mode, replica_locations, 0)
 
-    elif storage_mode == 's3' :
-        print("s3")
+        # Save replica in each location
+        for _ in range(len(replica_locations)):
+            result = replication.store_file(replica_locations, payload, file_id)
+            replica_locations = replica_locations[ 1 :]
+        postEnd = time.time()
+        Timediff = postEnd - postStart
+        f = open("replication1_redundancy_done.txt", "a")
+        f.write(str(round(Timediff, 4)) + ', ')
+        f.close()
+        return result
 
-    else:
-        logging.error("Unexpected storage mode: %s" % storage_mode)
-        return make_response("Wrong storage mode", 400)
+    elif storage_mode == 'replication2':
+        # Set number of replicas to be saved (default value: 1)
+        replication_number = payload.get('replicas', 1)
 
-    # Insert the File record in the DB
-    import json
-    db = utils.get_db()
-    cursor = db.execute(
-        "INSERT INTO `file`(`filename`, `size`, `content_type`, `storage_mode`, `storage_details`) VALUES (?,?,?,?,?)",
-        (filename, size, content_type, storage_mode, json.dumps(storage_details))
-    )
-    db.commit()
+        # Sample k random storage location adresses 
+        replica_locations = random.sample(DATANODE_ADDRESSES, k = int(replication_number))
 
-    return make_response({"id": cursor.lastrowid }, 201)
+        file_id = replication.store_db(filename, size, filetype, storage_mode, replica_locations, postStart)
+
+        # Send file to first node and return response to client
+        if len (replica_locations):
+            t1 = threading.Thread(target=replication.store_file, args=(replica_locations, payload, file_id,))
+            t1.start()
+            lead_done = time.time()
+            Timediff = lead_done - postStart
+            f = open("replication2_lead_done.txt", "a")
+            f.write(str(round(Timediff, 4)) + ', ')
+            f.close()
+            return make_response({"File: ": file_id,"File saved in locations: ": replica_locations})
 
 
 import logging

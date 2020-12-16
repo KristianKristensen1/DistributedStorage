@@ -45,6 +45,25 @@ def init_db():
         db.close()
 #
 
+def read_file_by_line(filepath):
+    """
+    Read the contents of the given text file line by line
+    and return it as a list of strings. Empty lines are skipped.
+
+    :param filepath: The text file to read
+    :returns: List of strings, one per line
+    """
+    lines = []
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+        # Remove the newline character at the end of each line
+        lines = [line.strip() for line in lines]
+        # Remove empty lines
+        lines = [line for line in lines if len(line)]
+    
+    return lines
+#
+
 def random_string(length=8):
     """
     Returns a random alphanumeric string of the given length. 
@@ -56,7 +75,7 @@ def random_string(length=8):
     return ''.join([random.SystemRandom().choice(string.ascii_letters + string.digits) for n in range(length)])
 #
 
-def write_file(data, filename=None):
+def write_file(data, filename):
     """
     Write the given data to a local file with the given filename
 
@@ -64,28 +83,24 @@ def write_file(data, filename=None):
     :param filename: The file name. If not given, a random string is generated
     :return: The file name of the newly written file, or None if there was an error
     """
-    if not filename:
-        # Generate random filename
-        filename = random_string(8)
-        # Add '.bin' extension
-        filename += ".bin"
-    
+    print("write file")
     try:
         # Open filename for writing binary content ('wb')
         # note: when a file is opened using the 'with' statment, 
         # it is closed automatically when the scope ends
         with open('./'+filename, 'wb') as f:
             f.write(data)
+            print("File %s saved, size: %d bytes" % (filename, len(data)))
     except EnvironmentError as e:
         print("Error writing file: {}".format(e))
-        return None
+        return False
     
-    return filename
+    return True
 #
 
 def is_raspberry_pi():
     """
     Returns True if the current platform is a Raspberry Pi, otherwise False.
     """
-    return os.uname().nodename == 'raspberrypi'
+    return False #os.uname().nodename == 'raspberrypi'
 #

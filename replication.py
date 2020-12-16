@@ -1,64 +1,40 @@
 import messages_pb2
 import math
 import random
+import urllib.request
+import json
+import utils
+
 
 from utils import random_string
 
-def store_file(file_data, replicas, send_task_socket, response_socket):
-    """
-    Implements storing replications of a file.
+def store_file(replica_locations, payload, file_id):
+    target_dn = replica_locations[ 0 ]
+    payload[ 'replica_locations' ] = replica_locations[ 1 :]
+    replica_locations = replica_locations[ 1 :]
+    payload[ 'file_id' ] = file_id
+    # Construct HTTP POST request to the next Datanode (re-send the payload we got)
+    req = urllib.request.Request(target_dn+ '/write' )
+    req.add_header( 'Content-Type' , 'application/json; charset=utf-8' )
+    payload_bytes = json.dumps(payload).encode( 'utf-8' ) # needs to be bytes
+    req.add_header( 'Content-Length' , len (payload_bytes))
+    # Send the request and wait for the response
+    urllib.request.urlopen(req, payload_bytes)
+    return {"File saved successfully with id: ": file_id}
 
-    :param file_data: A bytearray that holds the file contents
-    :param replicas: Number of replicas to be stored in different nodes
-    :param send_task_socket: A ZMQ PUSH socket to the storage nodes
-    :param response_socket: A ZMQ PULL socket where the storage nodes respond.
-    :return: The randomly generated file name
-    """
-    size = len(file_data)
-    # Generate a random name for the replication
-    file_data_name = random_string(8)
-    print("Filename for replication is: %s" % file_data_name)
 
-    for rep in range(int(replicas)):
-        # Send 1 'store data' protobuf request with file name
-        task = messages_pb2.storedata_request()
-        task.filename = file_data_name
-        send_task_socket.send_multipart([
-            task.SerializeToString(),
-            file_data
-        ])
+def get_file(file_id, file_location):
+    req = urllib.request.Request(file_location + "/read/" + str(file_id))
+    response = urllib.request.urlopen(req)
+    return response
 
-    # Wait until we receive 1 response from the workers
-    for task_nbr in range(int(replicas)):
-        resp = response_socket.recv_string()
-        print('Received: %s' % resp)
-    
-    # Return the chunk names of each replica
-    return file_data_name
-#
-
-def get_file(replication_filename, data_req_socket, response_socket):
-    """
-    Implements retrieving a file that is stored with Replication using 4 storage nodes.
-
-    :param replication_filename: Name of file to retrieve 
-    :param data_req_socket: A ZMQ SUB socket to request chunks from the storage nodes
-    :param response_socket: A ZMQ PULL socket where the storage nodes respond.
-    :return: The original file contents
-    """
-
-    # Request file
-    task1 = messages_pb2.getdata_request()
-    task1.filename = replication_filename
-    data_req_socket.send(
-        task1.SerializeToString()
+def store_db(filename, size, filetype, storage_mode, replica_locations, recieved_time):
+    # Insert the File record in the DB
+    db = utils.get_db()
+    cursor = db.execute(
+        "INSERT INTO `file`(`filename`, `size`, `content_type`, `storage_mode`, `replica_locations`, recieved_time) VALUES (?,?,?,?,?,?)" ,
+        (filename, size, filetype, storage_mode, ' ' .join(replica_locations), recieved_time)
     )
-
-    # Receive the file 
-    file_data = [None]
-    result = response_socket.recv_multipart()
-    filename_received = result[0].decode('utf-8')
-    file_data = result[1]
-    print("Received %s" % filename_received)
-    return file_data
-#
+    db.commit()
+    file_id = cursor.lastrowid
+    return file_id
