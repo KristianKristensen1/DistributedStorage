@@ -23,28 +23,32 @@ def encoding_file(file_data, max_erasures, send_task_socket, response_socket):
     # Make sure we can realize max_erasures with 4 storage nodes
     assert (max_erasures >= 0)
     assert (max_erasures < STORAGE_NODES_NUM)
-
+    print(f"erasures1")
     # How many coded fragments (=symbols) will be required to reconstruct the encoded data. 
     symbols = (STORAGE_NODES_NUM - max_erasures)
 
     # The size of one coded fragment (total size/number of symbols, rounded up)
     symbol_size = math.ceil(len(file_data) / symbols)
 
+    print(f"erasures2")
     # Kodo RLNC encoder using 2^8 finite field
     encoder = kodo.RLNCEncoder(kodo.field.binary8, symbols, symbol_size)
     encoder.set_symbols_storage(file_data)
     fragment_names = []
 
+    print(f"erasures3")
     task = []
     symbol = []
     # Generate one coded fragment for each Storage Node
     for i in range(STORAGE_NODES_NUM):
         # Select the next Reed Solomon coefficient vector
+        print(f"erasures5")
         coefficients = RS_CAUCHY_COEFFICIENTS[i]
 
         # Generate a coded fragment with these coefficients
         # (trim the coefficients to the actual length we need)
         symbol.append(encoder.produce_symbol(coefficients[:symbols]))
+        print(f"erasures6")
 
         # Generate a random name for it and save
         name = random_string(8)
@@ -59,15 +63,18 @@ def encoding_file(file_data, max_erasures, send_task_socket, response_socket):
         # task[i].filename = name
 
     end_enc_time = time.time()
-
+    print(f"erasures4")
+    print(send_task_socket)
     for i in range(STORAGE_NODES_NUM):
         send_task_socket.send_multipart([task[i].SerializeToString(), bytearray(symbol[i])])
 
+    print(f"erasures8")
     # Wait until we receive a response for every fragment
     for task_nbr in range(STORAGE_NODES_NUM):
         resp = response_socket.recv_string()
         print('Received: %s' % resp)
 
+    print(f"erasures9")
 
     Timediff = end_enc_time - start_enc_time
 

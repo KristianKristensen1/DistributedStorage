@@ -8,6 +8,7 @@ import logging
 import erasure_coding
 import os.path
 from asgiref.sync import async_to_sync, sync_to_async
+import base64
 # from utils import is_raspberry_pi
 
 def get_db():
@@ -31,7 +32,7 @@ context = zmq.Context()
 
 # Socket to send tasks to Storage Nodes
 send_task_socket = context.socket(zmq.PUSH)
-send_task_socket.bind("tcp://""*:5557")
+send_task_socket.bind("tcp://*:5557")
 
 # Socket to receive messages from Storage Nodes
 response_socket = context.socket(zmq.PULL)
@@ -64,21 +65,33 @@ app.teardown_appcontext(close_db)
 def add_files_lead():
     start_time = time.time()
     # Flask separates files from the other form fields
-    payload = request.form
-    files = request.files
+    # payload = request.form
+    # files = request.files
+
+    payload = request.get_json()
+    file_data = base64.b64decode(payload.get( 'file_data' ))
+    filename = payload.get( 'filename' )
+    filetype = payload.get( 'type' )
+    storage_mode = payload.get('storage')
 
     # Make sure there is a file in the request
-    if not files or not files.get('file'):
+    # if not files or not files.get('file'):
+    #     logging.error("No file was uploaded in the request!")
+    #     return make_response("File missing!", 400) 
+    if not filename:
         logging.error("No file was uploaded in the request!")
         return make_response("File missing!", 400)
 
     # Reference to the file under 'file' key
-    file = files.get('file')
+    # file = files.get('file')
+    file = file_data
     # The sender encodes a the file name and type together with the file contents
-    filename = file.filename
-    content_type = file.mimetype
+    # filename = file.filename
+    # content_type = file.mimetype
+    content_type = filetype
     # Load the file contents into a bytearray and measure its size
-    data = bytearray(file.read())
+    # data = bytearray(file.read())
+    data = bytearray(file)
     size = len(data)
     print("File received: %s, size: %d bytes, type: %s" % (filename, size, content_type))
 
@@ -89,6 +102,7 @@ def add_files_lead():
     print(f"Max erasures: {max_erasures}")
     # Store the file contents with Reed Solomon erasure coding
     fragment_names = erasure_coding.encoding_file(data, max_erasures, send_task_socket, response_socket)
+    print(f"after erasure coding")
     storage_details = {"coded_fragments": fragment_names, "max_erasures": max_erasures}
 
     # Insert the File record in the DB
@@ -106,7 +120,7 @@ def add_files_lead():
     ff = open("erasure_coding_post_lead.txt", "a")
     ff.write(str(round(Timediff, 4)) + ', ')
     ff.close()
-
+    print("fileID"+str(cursor.lastrowid))
     return make_response({"id": cursor.lastrowid}, 201)
 
 
@@ -154,21 +168,33 @@ def add_files_random():
     start_time = time.time()
 
     # Flask separates files from the other form fields
-    payload = request.form
-    files = request.files
+    # payload = request.form
+    # files = request.files
+
+    payload = request.get_json()
+    file_data = base64.b64decode(payload.get( 'file_data' ))
+    filename = payload.get( 'filename' )
+    filetype = payload.get( 'type' )
+    storage_mode = payload.get('storage')
 
     # Make sure there is a file in the request
-    if not files or not files.get('file'):
+    # if not files or not files.get('file'):
+    #     logging.error("No file was uploaded in the request!")
+    #     return make_response("File missing!", 400) 
+    if not filename:
         logging.error("No file was uploaded in the request!")
         return make_response("File missing!", 400)
 
     # Reference to the file under 'file' key
-    file = files.get('file')
+    # file = files.get('file')
+    file = file_data
     # The sender encodes a the file name and type together with the file contents
-    filename = file.filename
-    content_type = file.mimetype
+    # filename = file.filename
+    # content_type = file.mimetype
+    content_type = filetype
     # Load the file contents into a bytearray and measure its size
-    data = bytearray(file.read())
+    # data = bytearray(file.read())
+    data = bytearray(file)
     size = len(data)
     print("File received: %s, size: %d bytes, type: %s" % (filename, size, content_type))
 
@@ -193,7 +219,7 @@ def add_files_random():
     ff = open("erasure_coding_post_worker.txt", "a")
     ff.write(str(round(Timediff, 4)) + ', ')
     ff.close()
-
+    print("fileID"+str(cursor.lastrowid))
     return make_response({"id": cursor.lastrowid}, 201)
 
 
@@ -210,7 +236,7 @@ def download_file_random(file_id):
     if not f:
         return make_response({"message": "File {} not found".format(file_id)}, 404)
 
-    file = async_random_node_decode(f)
+    file = async_random_node_decode(f,start_time)
 
     end_time = time.time()
     Timediff = end_time - start_time
@@ -246,7 +272,7 @@ async def async_random_node_encode(data, max_erasures, start_time):
 
 
 @async_to_sync
-async def async_random_node_decode(f):
+async def async_random_node_decode(f, start_time):
     # Convert to a Python dictionary
     f = dict(f)
     print("File requested: {}".format(f['filename']))
@@ -266,6 +292,13 @@ async def async_random_node_decode(f):
          bytes(fragment_names[1], 'utf-8'),
          bytes(fragment_names[2], 'utf-8'),
          bytes(fragment_names[3], 'utf-8')])
+
+    end_time = time.time()
+    Timediff = end_time - start_time
+    ff = open("erasure_coding_get_worker_free_lead.txt", "a")
+    ff.write(str(round(Timediff, 4)) + ', ')
+    ff.close()
+
 
     message = receive_task_socket_worker_node.recv_multipart()
     file = message[0]

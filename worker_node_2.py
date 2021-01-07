@@ -14,7 +14,7 @@ if data_folder != "./":
 print("Data folder: %s" % data_folder)
 
 context = zmq.Context()
-leanode_ip= "192.196.0.100"#"localhost"
+leanode_ip= "192.168.0.100"#"localhost"
 receiver_random_lead_node = context.socket(zmq.PULL)
 receiver_random_lead_node.connect("tcp://"+leanode_ip+":5560")
 print("Listening on " + "tcp://"+leanode_ip+":5560")

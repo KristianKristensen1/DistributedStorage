@@ -25,9 +25,9 @@ print("Data folder: %s" % data_folder)
 #    subscriber_address = "tcp://192.168.0." + server_address + ":5559"
 # else:
 # On the local computer: use localhost
-leadaddress = "192.196.0.100"#"localhost"
-w1 = "192.196.0.101"#"localhost"
-w2 = "192.196.0.102"#"localhost"
+leadaddress = "192.168.0.100"#"localhost"
+w1 = "192.168.0.101"#"localhost"
+w2 = "192.168.0.102"#"localhost"
 pull_address = "tcp://"+leadaddress+":5557"
 pull_address_worker_1 = "tcp://"+w1+":5561"
 pull_address_worker_2 = "tcp://"+w2+":5565"
@@ -90,6 +90,7 @@ poller.register(subscriber_lead_node, zmq.POLLIN)
 poller.register(subscriber_worker_1, zmq.POLLIN)
 poller.register(subscriber_worker_2, zmq.POLLIN)
 
+print("beforesocks")
 while True:
     try:
         # Poll all sockets
@@ -97,7 +98,7 @@ while True:
     except KeyboardInterrupt:
         break
     pass
-
+    print("aftersocks")
     # At this point one or multiple sockets may have received a message
 
     # After Encoding Only Lead
