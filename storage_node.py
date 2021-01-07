@@ -25,15 +25,18 @@ print("Data folder: %s" % data_folder)
 #    subscriber_address = "tcp://192.168.0." + server_address + ":5559"
 # else:
 # On the local computer: use localhost
-pull_address = "tcp://localhost:5557"
-pull_address_worker_1 = "tcp://localhost:5561"
-pull_address_worker_2 = "tcp://localhost:5565"
-push_address = "tcp://localhost:5558"
-push_address_worker_1 = "tcp://localhost:5562"
-push_address_worker_2 = "tcp://localhost:5566"
-subscriber_address = "tcp://localhost:5559"
-subscriber_address_worker_1 = "tcp://localhost:5564"
-subscriber_address_worker_2 = "tcp://localhost:5568"
+leadaddress = "192.196.0.100"#"localhost"
+w1 = "192.196.0.101"#"localhost"
+w2 = "192.196.0.102"#"localhost"
+pull_address = "tcp://"+leadaddress+":5557"
+pull_address_worker_1 = "tcp://"+w1+":5561"
+pull_address_worker_2 = "tcp://"+w2+":5565"
+push_address = "tcp://"+leadaddress+":5558"
+push_address_worker_1 = "tcp://"+w1+":5562"
+push_address_worker_2 = "tcp://"+w2+":5566"
+subscriber_address = "tcp://"+leadaddress+":5559"
+subscriber_address_worker_1 = "tcp://"+w1+":5564"
+subscriber_address_worker_2 = "tcp://"+w2+":5568"
 
 context = zmq.Context()
 # Socket to receive Store Chunk messages from the controller

@@ -14,14 +14,14 @@ if data_folder != "./":
 print("Data folder: %s" % data_folder)
 
 context = zmq.Context()
-
+leanode_ip= "192.196.0.100"#"localhost"
 receiver_random_lead_node = context.socket(zmq.PULL)
-receiver_random_lead_node.connect("tcp://localhost:5560")
-print("Listening on " + "tcp://localhost:5560")
+receiver_random_lead_node.connect("tcp://"+leanode_ip+":5560")
+print("Listening on " + "tcp://"+leanode_ip+":5560")
 
 # Socket to send result to lead node
 send_result_socket_lead_node = context.socket(zmq.PUSH)
-send_result_socket_lead_node.connect("tcp://localhost:5563")
+send_result_socket_lead_node.connect("tcp://"+leanode_ip+":5563")
 
 # Socket to send tasks to Storage Nodes
 send_task_socket_worker_encode = context.socket(zmq.PUSH)
